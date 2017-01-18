@@ -21,7 +21,7 @@ target 'SwiftLinkPreviewExample' do
 
   pod 'Alamofire'
   pod 'SwiftyDrop'
-  pod 'ImageSlideshow', '~> 1.0.0-beta.1'
+  pod 'ImageSlideshow', '~> 1.0.1-beta.1'
   pod 'ImageSlideshow/Alamofire'
 
 end

@@ -53,7 +53,7 @@ open class SwiftLinkPreview: NSObject {
             })
             
         } else {
-            onError(PreviewError.noURLHasBeenFound(self.text))
+            onError(PreviewError.noURLHasBeenFound)
         }
         
     }
@@ -224,7 +224,7 @@ extension SwiftLinkPreview {
     private func tryAnotherEnconding(_ sourceUrl: URL, encodingArray: [String.Encoding], completion: @escaping () -> (), onError: (PreviewError) -> ()) {
         
         if encodingArray.isEmpty {
-            onError(PreviewError.parseError(url.absoluteString))
+            onError(PreviewError.parseError)
         } else {
             
             do {

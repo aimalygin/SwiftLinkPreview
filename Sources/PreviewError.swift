@@ -7,11 +7,11 @@
 //
 import Foundation
 
-public enum PreviewError: Error, CustomStringConvertible {
-  case noURLHasBeenFound(String?)
-  case invalidURL(String?)
-  case cannotBeOpened(String?)
-  case parseError(String?)
+@objc public enum PreviewError: Int, Error, CustomStringConvertible {
+  case noURLHasBeenFound
+  case invalidURL
+  case cannotBeOpened
+  case parseError
   
   public var description: String {
     switch(self) {

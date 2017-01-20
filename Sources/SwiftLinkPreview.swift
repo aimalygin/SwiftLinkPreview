@@ -41,6 +41,12 @@ open class SwiftLinkPreview: NSObject {
     public static let defaultWorkQueue = DispatchQueue.global()
     
     // MARK: - Constructor
+    public override init() {
+        self.workQueue = SwiftLinkPreview.defaultWorkQueue
+        self.responseQueue = DispatchQueue.main
+        self.cache = InMemoryCache.init(invalidationTimeout: 3600, cleanupInterval: 3600)
+        self.session = URLSession.shared
+    }
     public init(session: URLSession = URLSession.shared, workQueue: DispatchQueue = SwiftLinkPreview.defaultWorkQueue, responseQueue: DispatchQueue = DispatchQueue.main, cache: Cache = DisabledCache.instance) {
         self.workQueue = workQueue
         self.responseQueue = responseQueue
@@ -117,12 +123,42 @@ open class SwiftLinkPreview: NSObject {
 extension SwiftLinkPreview {
     
     // Extract first URL from text
+//<<<<<<< Updated upstream
+//    internal func extractURL(text: String) -> URL? {
+//        let pieces = text.components(separatedBy: " ").filter { $0.trim.isValidURL() }
+//        if let url = URL(string: pieces[0]) {
+//=======
     internal func extractURL(text: String) -> URL? {
-        let pieces = text.components(separatedBy: " ").filter { $0.trim.isValidURL() }
-        if let url = URL(string: pieces[0]) {
+        
+        let explosion = text.characters.split{$0 == " " || $0 == "\n"}.map(String.init)
+        let pieces = explosion.filter({ $0.trim.isValidURL() })
+        if pieces.count == 0 {
+            return nil;
+        }
+        let piece = pieces[0]
+        
+        if let url = URL(string: piece.addingPercentEncoding(withAllowedCharacters: .urlFragmentAllowed)!) {
+            
             return url
         }
         return nil
+    }
+    
+    class func checkText(text: String) -> Bool {
+        let explosion = text.characters.split{$0 == " " || $0 == "\n"}.map(String.init)
+        let pieces = explosion.filter({ $0.trim.isValidURL() })
+        if pieces.count == 0 {
+            return false;
+        }
+        let piece = pieces[0]
+        
+        if URL(string: piece.addingPercentEncoding(withAllowedCharacters: .urlFragmentAllowed)!) != nil {
+            
+            return true
+            
+        }
+        
+        return false
     }
     
     // Unshorten URL by following redirections
@@ -304,6 +340,29 @@ extension SwiftLinkPreview {
 
 // Tag functions
 extension SwiftLinkPreview {
+    
+    internal func objcPreview(_ text: String!, onSuccess: @escaping ([String: AnyObject]) -> (), error: @escaping (PreviewError) -> ()) -> Bool {
+        return self.preview(text, onSuccess: { result in
+            
+            var res = ["url": "" as AnyObject,
+                           "finalUrl": "" as AnyObject,
+                           "canonicalUrl": "" as AnyObject,
+                "title": "" as AnyObject,
+                "description": "" as AnyObject,
+                "images": [] as AnyObject,
+                "image": "" as AnyObject]
+            
+            res["url"] = result[.url] as AnyObject?
+            res["finalUrl"] = result[.finalUrl] as AnyObject?
+            res["canonicalUrl"] = result[.canonicalUrl] as AnyObject?
+            res["title"] = result[.title] as AnyObject?
+            res["description"] = result[.description] as AnyObject?
+            res["images"] = result[.images] as AnyObject?
+            res["image"] = result[.image] as AnyObject?
+            onSuccess(res)
+            
+        }, onError: {err in error(err) }).isCancelled
+    }
     
     // Search for meta tags
     internal func crawlMetaTags(_ htmlCode: String, canonicalUrl: String?, result: Response) -> Response {

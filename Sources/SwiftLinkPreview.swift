@@ -37,6 +37,7 @@ open class SwiftLinkPreview: NSObject {
     public let workQueue: DispatchQueue
     public let responseQueue: DispatchQueue
     public let cache: Cache
+    public let wireLinkPreview = LinkPreviewDetector.init(resultsQueue: OperationQueue.init())
     
     public static let defaultWorkQueue = DispatchQueue.global()
     
@@ -215,7 +216,7 @@ extension SwiftLinkPreview {
     }
     
     // Extract HTML code and the information contained on it
-    fileprivate func extractInfo(_ url: URL, cancellable: Cancellable, canonicalUrl: String?, completion: @escaping (Response) -> Void, onError: (PreviewError) -> ()) {
+    fileprivate func extractInfo(_ url: URL, cancellable: Cancellable, canonicalUrl: String?, completion: @escaping (Response) -> Void, onError: @escaping (PreviewError) -> ()) {
         if cancellable.isCancelled {return}
         
         if(url.absoluteString.isImage()) {
@@ -228,26 +229,72 @@ extension SwiftLinkPreview {
             
             completion(result)
         } else {
-            let sourceUrl = url.absoluteString.hasPrefix("http://") || url.absoluteString.hasPrefix("https://") ? url : URL(string: "http://\(url)")
-            do {
-                let data = try Data(contentsOf: sourceUrl!)
-                var source: NSString? = nil
-                NSString.stringEncoding(for: data, encodingOptions: nil, convertedString: &source, usedLossyConversion: nil)
-                
-                if let source = source {
-                    if !cancellable.isCancelled {
-                        self.parseHtmlString(source as String, canonicalUrl: canonicalUrl, completion: completion)
+//            ServerLinkPreview.init().preview(url, onSuccess: { result in
+//                completion(result)
+//            }, onError: { error in
+//                onError(error)
+//            })
+            var successed = false
+            self.wireLinkPreview.downloadLinkPreviews(inText: url.absoluteString, completion: { previews in
+                var result = Response()
+                for resPreview in previews {
+                    switch resPreview {
+                    case let art as Article:
+                        if (art.title != nil && art.summary != nil) {
+                            result[.title] = art.title
+                            result[.description] = art.summary
+                            successed = true
+                        }
+                    case let twit as TwitterStatus:
+                        if ((twit.author != nil || twit.username != nil) && twit.message != nil) {
+                            result[.title] = twit.author != nil ? twit.author : twit.username
+                            result[.description] = twit.message
+                            successed = true
+                        }
+                    case let inst as InstagramPicture:
+                        if (inst.title != nil) {
+                            result[.title] = inst.title
+                            successed = true
+                        }
+                    default: successed = false
+                        
                     }
+                    if successed {
+                        result[.image] = resPreview.imageURLs.first?.absoluteString
+                        result[.images] = [resPreview.imageURLs.map({ (value: URL) -> String in
+                            return value.absoluteString
+                        })]
+                        result[.url] = url.absoluteString
+                        result[.finalUrl] = resPreview.permanentURL?.absoluteString
+                        result[.canonicalUrl] = url.host
+                        break;
+                    }
+                }
+                if successed {
+                    completion(result)
                 } else {
-                    if !cancellable.isCancelled {
-                        onError(.parseError)
+                    let sourceUrl = url.absoluteString.hasPrefix("http://") || url.absoluteString.hasPrefix("https://") ? url : URL(string: "http://\(url)")
+                    do {
+                        let data = try Data(contentsOf: sourceUrl!)
+                        var source: NSString? = nil
+                        NSString.stringEncoding(for: data, encodingOptions: nil, convertedString: &source, usedLossyConversion: nil)
+                        
+                        if let source = source {
+                            if !cancellable.isCancelled {
+                                self.parseHtmlString(source as String, canonicalUrl: canonicalUrl, completion: completion)
+                            }
+                        } else {
+                            if !cancellable.isCancelled {
+                                onError(.parseError)
+                            }
+                        }
+                    } catch {
+                        if !cancellable.isCancelled {
+                            onError(.cannotBeOpened)
+                        }
                     }
                 }
-            } catch {
-                if !cancellable.isCancelled {
-                    onError(.cannotBeOpened)
-                }
-            }
+            })
         }
     }
     
@@ -273,44 +320,44 @@ extension SwiftLinkPreview {
     
     // Perform the page crawiling
     private func performPageCrawling(_ htmlCode: String, canonicalUrl: String?) -> Response {
-//        let result = self.crawlMetaTags(htmlCode, canonicalUrl: canonicalUrl, result: Response())
+        let result = self.crawlMetaTags(htmlCode, canonicalUrl: canonicalUrl, result: Response())
+
+        var response = self.crawlTitle(htmlCode, result: result)
+        
+        response = self.crawlDescription(response.htmlCode, result: response.result)
+        
+        return self.crawlImages(response.htmlCode, canonicalUrl: canonicalUrl, result: response.result)
+        
+//        var resp = result
 //        
-//        var response = self.crawlTitle(htmlCode, result: result)
+//        let item3 = DispatchWorkItem {
+//            var response = self.crawlTitle(htmlCode, result: result)
+//            resp[.title] = response.result[.title]
+//            NSLog("")
+//        }
 //        
-//        response = self.crawlDescription(response.htmlCode, result: response.result)
+//        let group = DispatchGroup()
+//        let item = DispatchWorkItem {
+//            var response = self.crawlDescription(htmlCode, result: result)
+//            resp[.description] = response.result[.description]
+//            NSLog("")
+//        }
+//        let item2 = DispatchWorkItem {
+//            var response = self.crawlImages(htmlCode, canonicalUrl: canonicalUrl, result: result)
+//            if response[.image] != nil {
+//                resp[.image] = response[.image]
+//            }
+//            if response[.images] != nil {
+//                resp[.images] = response[.images]
+//            }
+//            NSLog("")
+//        }
+//        DispatchQueue.global().async(group: group, execute: item3)
+//        DispatchQueue.global().async(group: group, execute: item)
+//        DispatchQueue.global().async(group: group, execute: item2)
+//        group.wait()
 //        
-//        return self.crawlImages(response.htmlCode, canonicalUrl: canonicalUrl, result: response.result)
-        
-        var resp = result
-        
-        let item3 = DispatchWorkItem {
-            var response = self.crawlTitle(htmlCode, result: result)
-            resp[.title] = response.result[.title]
-            NSLog("")
-        }
-        
-        let group = DispatchGroup()
-        let item = DispatchWorkItem {
-            var response = self.crawlDescription(htmlCode, result: result)
-            resp[.description] = response.result[.description]
-            NSLog("")
-        }
-        let item2 = DispatchWorkItem {
-            var response = self.crawlImages(htmlCode, canonicalUrl: canonicalUrl, result: result)
-            if response[.image] != nil {
-                resp[.image] = response[.image]
-            }
-            if response[.images] != nil {
-                resp[.images] = response[.images]
-            }
-            NSLog("")
-        }
-        DispatchQueue.global().async(group: group, execute: item3)
-        DispatchQueue.global().async(group: group, execute: item)
-        DispatchQueue.global().async(group: group, execute: item2)
-        group.wait()
-        
-        return resp
+//        return resp
     }
     
     

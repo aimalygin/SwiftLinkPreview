@@ -135,8 +135,8 @@ extension SwiftLinkPreview {
         if pieces.count == 0 {
             return nil;
         }
-        let piece = pieces[0]
-        
+        var piece = pieces[0]
+        piece = piece.removingPercentEncoding!
         if let url = URL(string: piece.addingPercentEncoding(withAllowedCharacters: .urlFragmentAllowed)!) {
             
             return url
@@ -150,8 +150,8 @@ extension SwiftLinkPreview {
         if pieces.count == 0 {
             return false;
         }
-        let piece = pieces[0]
-        
+        var piece = pieces[0]
+        piece = piece.removingPercentEncoding!
         if URL(string: piece.addingPercentEncoding(withAllowedCharacters: .urlFragmentAllowed)!) != nil {
             
             return true
@@ -273,13 +273,44 @@ extension SwiftLinkPreview {
     
     // Perform the page crawiling
     private func performPageCrawling(_ htmlCode: String, canonicalUrl: String?) -> Response {
-        let result = self.crawlMetaTags(htmlCode, canonicalUrl: canonicalUrl, result: Response())
+//        let result = self.crawlMetaTags(htmlCode, canonicalUrl: canonicalUrl, result: Response())
+//        
+//        var response = self.crawlTitle(htmlCode, result: result)
+//        
+//        response = self.crawlDescription(response.htmlCode, result: response.result)
+//        
+//        return self.crawlImages(response.htmlCode, canonicalUrl: canonicalUrl, result: response.result)
         
-        var response = self.crawlTitle(htmlCode, result: result)
+        var resp = result
         
-        response = self.crawlDescription(response.htmlCode, result: response.result)
+        let item3 = DispatchWorkItem {
+            var response = self.crawlTitle(htmlCode, result: result)
+            resp[.title] = response.result[.title]
+            NSLog("")
+        }
         
-        return self.crawlImages(response.htmlCode, canonicalUrl: canonicalUrl, result: response.result)
+        let group = DispatchGroup()
+        let item = DispatchWorkItem {
+            var response = self.crawlDescription(htmlCode, result: result)
+            resp[.description] = response.result[.description]
+            NSLog("")
+        }
+        let item2 = DispatchWorkItem {
+            var response = self.crawlImages(htmlCode, canonicalUrl: canonicalUrl, result: result)
+            if response[.image] != nil {
+                resp[.image] = response[.image]
+            }
+            if response[.images] != nil {
+                resp[.images] = response[.images]
+            }
+            NSLog("")
+        }
+        DispatchQueue.global().async(group: group, execute: item3)
+        DispatchQueue.global().async(group: group, execute: item)
+        DispatchQueue.global().async(group: group, execute: item2)
+        group.wait()
+        
+        return resp
     }
     
     

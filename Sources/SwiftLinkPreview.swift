@@ -162,6 +162,23 @@ extension SwiftLinkPreview {
         return false
     }
     
+    class func extractURL(text: String) -> URL? {
+        let explosion = text.characters.split{$0 == " " || $0 == "\n"}.map(String.init)
+        let pieces = explosion.filter({ $0.trim.isValidURL() })
+        if pieces.count == 0 {
+            return nil
+        }
+        var piece = pieces[0]
+        piece = piece.removingPercentEncoding!
+        if let url = URL(string: piece.addingPercentEncoding(withAllowedCharacters: .urlFragmentAllowed)!) {
+            
+            return url
+            
+        }
+        
+        return nil
+    }
+    
     // Unshorten URL by following redirections
     fileprivate func unshortenURL(_ url: URL, cancellable: Cancellable, completion: @escaping (URL) -> Void, onError: @escaping (PreviewError) -> Void) {
         
